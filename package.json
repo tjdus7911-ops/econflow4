@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node serve.mjs",
     "start": "node serve.mjs",
-    "check": "node --check src/mock-data.js && node --check src/app.js && node tests/smoke.mjs",
+    "check": "node --check src/mock-data.js && node --check src/extended-data.js && node --check src/app.js && node tests/smoke.mjs",
     "test": "node tests/smoke.mjs"
   }
 }
