@@ -1,0 +1,13 @@
+{
+  "name": "econflow-ux-prototype",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "EconFlow WHAT → WHY → IMPACT → WATCH interactive prototype",
+  "scripts": {
+    "dev": "node serve.mjs",
+    "start": "node serve.mjs",
+    "check": "node --check src/mock-data.js && node --check src/app.js && node tests/smoke.mjs",
+    "test": "node tests/smoke.mjs"
+  }
+}
