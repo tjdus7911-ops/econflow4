@@ -140,13 +140,14 @@ function regionMark(region) {
 
 function renderHeader(activePage) {
   const navItems = [
-    ["today", "오늘"],
-    ["explore", "탐색"],
-    ["market", "시장"],
-    ["calendar", "캘린더"],
-    ["my", "MY"]
+    ["today", "오늘", "spark"],
+    ["explore", "탐색", "layers"],
+    ["market", "시장", "trend"],
+    ["calendar", "캘린더", "calendar"],
+    ["my", "MY", "heart"]
   ];
   return `
+    <a class="skip-link" href="#main-content">본문으로 건너뛰기</a>
     <header class="app-header">
       <div class="header-inner">
         <a class="brand" href="#/today" aria-label="EconFlow 홈">
@@ -154,7 +155,14 @@ function renderHeader(activePage) {
           <span>EconFlow</span>
         </a>
         <nav class="main-nav" aria-label="주요 메뉴">
-          ${navItems.map(([id, label]) => `<a href="#/${id}" class="nav-link ${activePage === id || (id === "explore" && activePage === "company") ? "is-active" : ""}">${label}${id === "calendar" && state.watchItems.length ? `<span class="nav-dot" aria-label="지켜보는 일정 있음"></span>` : ""}</a>`).join("")}
+          ${navItems.map(([id, label, iconName]) => {
+            const active = activePage === id || (id === "explore" && ["company", "concept"].includes(activePage));
+            return `<a href="#/${id}" class="nav-link ${active ? "is-active" : ""}" ${active ? 'aria-current="page"' : ""}>
+              <span class="nav-icon">${icon(iconName, 19)}</span>
+              <span class="nav-label">${label}</span>
+              ${id === "calendar" && state.watchItems.length ? `<span class="nav-dot" aria-label="지켜보는 일정 있음"></span>` : ""}
+            </a>`;
+          }).join("")}
         </nav>
         <button class="global-search-trigger" type="button" data-action="search-open">
           ${icon("search", 17)}
@@ -219,18 +227,31 @@ function renderToday() {
       <section class="today-hero content-width">
         <div class="hero-copy">
           <p class="date-label"><span class="status-pulse"></span> 9월 23일 수요일</p>
-          <h1>오늘 경제,<br><em>3분이면 충분해요.</em></h1>
-          <p>흩어진 뉴스와 데이터를 하나의 흐름으로 연결했어요.<br>결과를 예측하기보다, 지금 무엇이 왜 연결되는지 살펴보세요.</p>
-        </div>
-        <aside class="briefing-card">
-          <div class="briefing-head"><span>${icon("spark", 18)} 오늘의 브리핑</span><strong>01 / 04</strong></div>
-          <div class="briefing-visual">
-            <span class="pulse-orbit orbit-a"></span><span class="pulse-orbit orbit-b"></span>
-            <span class="briefing-node main">원/달러</span>
-            <span class="briefing-node n1">미국 금리</span><span class="briefing-node n2">수입물가</span><span class="briefing-node n3">달러</span>
+          <p class="hero-kicker">오늘을 이해하는 가장 짧은 경로</p>
+          <h1>오늘 경제를,<br><em><span>흐름으로</span> <span>이해하세요.</span></em></h1>
+          <p class="hero-summary">흩어진 뉴스와 데이터를 원인부터 영향까지 연결했어요.<br>예측보다 이해에 집중해, 지금 중요한 변화만 선명하게 보여드려요.</p>
+          <div class="hero-actions">
+            <button class="primary-button hero-primary" data-node="usdkrw">3분 브리핑 시작 ${icon("arrow", 17)}</button>
+            <a class="secondary-button hero-secondary" href="#/explore/usdkrw">경제지도 열기 ${icon("layers", 16)}</a>
           </div>
-          <p><strong>가장 먼저 볼 변화</strong><br>환율 변동이 어디에서 시작해 어디로 이어지는지 40초 안에 확인해 보세요.</p>
-          <button class="briefing-start" data-node="usdkrw">흐름 따라가기 ${icon("arrow", 16)}</button>
+          <div class="hero-proof" role="list" aria-label="오늘의 콘텐츠 요약">
+            <span role="listitem"><strong>${todayIssues.length}</strong> 핵심 변화</span>
+            <span role="listitem"><strong>${popularFlows.length}</strong> 인기 흐름</span>
+            <span role="listitem"><strong>공식</strong> 출처 우선</span>
+          </div>
+        </div>
+        <aside class="briefing-card" aria-label="오늘의 추천 브리핑">
+          <div class="briefing-art" aria-hidden="true">
+            <img src="./src/assets/econflow-hero-v1.png" alt="" width="1536" height="1024">
+            <span class="briefing-art-wash"></span>
+            <span class="briefing-badge">${icon("spark", 16)} 오늘의 추천 브리핑</span>
+          </div>
+          <div class="briefing-content">
+            <p class="briefing-eyebrow">가장 먼저 볼 변화</p>
+            <h2>환율 움직임은<br>어디서 시작됐을까요?</h2>
+            <p>미국 금리부터 수입물가까지, 연결된 네 단계를 40초 안에 확인해 보세요.</p>
+            <button class="briefing-start" data-node="usdkrw">흐름 따라가기 ${icon("arrow", 16)}</button>
+          </div>
         </aside>
       </section>
 
@@ -608,7 +629,8 @@ function renderMarketCard(item) {
   const direction = change.trim().startsWith("+") ? "up" : change.trim().startsWith("-") ? "down" : "flat";
   const context = marketContext[target] || ["공식 데이터", "시장 기대", "글로벌 흐름"];
   const conceptId = target === "usdkrw" || target === "yen" ? "exchange" : target === "gold" ? "gold" : target === "oil" ? "oil" : target === "consumer-prices" || target === "us-inflation" ? "cpi" : null;
-  return `<article class="market-card enhanced"><div class="market-card-head">${regionMark(region)}<span>${region}</span><button class="mini-heart ${state.interests.includes(target) ? "is-active" : ""}" data-action="interest-toggle" data-id="${target}">${icon("heart", 16, state.interests.includes(target))}</button></div><div class="market-title-line"><h3>${name}</h3>${conceptId ? conceptTrigger(conceptId) : ""}</div><div class="market-value"><strong>${value}</strong><span class="move-${direction}">${change}</span></div><div class="market-range"><span>오늘 범위 <b>${direction === "up" ? "-0.18 ~ +0.72%" : "-0.68 ~ +0.21%"}</b></span><span>최근 1개월 <b>${direction === "down" ? "-1.4%" : "+2.8%"}</b></span></div><div class="market-status"><span>현재 맥락</span><b>${status}</b></div><div class="sparkline ${direction}"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="market-context-list"><span>오늘 시장과 함께 움직인 주요 요인</span>${context.map((factor) => `<b>${factor}</b>`).join("")}</div><div class="market-actions"><button class="text-button" data-node="${target}">왜 움직였지?</button><button class="primary-button ghost small" data-node="${target}">관련 경제 흐름 ${icon("arrow", 14)}</button></div><div class="updated-line">${icon("clock", 13)} 10:20 업데이트 · Mock</div></article>`;
+  const interested = state.interests.includes(target);
+  return `<article class="market-card enhanced"><div class="market-card-head">${regionMark(region)}<span>${region}</span><button class="mini-heart ${interested ? "is-active" : ""}" data-action="interest-toggle" data-id="${target}" aria-pressed="${interested}" aria-label="${name} ${interested ? "관심 해제" : "관심 등록"}">${icon("heart", 16, interested)}</button></div><div class="market-title-line"><h3>${name}</h3>${conceptId ? conceptTrigger(conceptId) : ""}</div><div class="market-value"><strong>${value}</strong><span class="move-${direction}">${change}</span></div><div class="market-range"><span>오늘 범위 <b>${direction === "up" ? "-0.18 ~ +0.72%" : "-0.68 ~ +0.21%"}</b></span><span>최근 1개월 <b>${direction === "down" ? "-1.4%" : "+2.8%"}</b></span></div><div class="market-status"><span>현재 맥락</span><b>${status}</b></div><div class="sparkline ${direction}"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="market-context-list"><span>오늘 시장과 함께 움직인 주요 요인</span>${context.map((factor) => `<b>${factor}</b>`).join("")}</div><div class="market-actions"><button class="text-button" data-node="${target}">왜 움직였지?</button><button class="primary-button ghost small" data-node="${target}">관련 경제 흐름 ${icon("arrow", 14)}</button></div><div class="updated-line">${icon("clock", 13)} 10:20 업데이트 · Mock</div></article>`;
 }
 
 function yieldCurveSvg(country, period) {
@@ -620,7 +642,7 @@ function yieldCurveSvg(country, period) {
   const min = Math.min(...values) - .15, max = Math.max(...values) + .15, range = max - min || 1;
   const width = 720, height = 230, xPad = 36, yPad = 24;
   const points = (data) => data.map((value, index) => `${xPad + index * ((width - xPad * 2) / (data.length - 1))},${height - yPad - ((value - min) / range) * (height - yPad * 2)}`).join(" ");
-  return `<div class="yield-chart"><svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="${country} 국채 수익률곡선">${[0,1,2,3].map((i) => `<line x1="${xPad}" y1="${yPad + i * 58}" x2="${width-xPad}" y2="${yPad + i * 58}"/>`).join("")}<polyline class="curve-current" points="${points(current.yields)}" fill="none" vector-effect="non-scaling-stroke"/>${period !== "현재" && compare ? `<polyline class="curve-compare" points="${points(compare.yields)}" fill="none" vector-effect="non-scaling-stroke"/>` : ""}${current.yields.map((value,index) => `<circle class="curve-dot" cx="${xPad + index * ((width - xPad * 2) / 6)}" cy="${height-yPad-((value-min)/range)*(height-yPad*2)}" r="4"/><text x="${xPad + index * ((width - xPad * 2) / 6)}" y="${height-5}" text-anchor="middle">${current.maturities[index]}</text><text class="curve-value" x="${xPad + index * ((width - xPad * 2) / 6)}" y="${height-yPad-((value-min)/range)*(height-yPad*2)-10}" text-anchor="middle">${value.toFixed(2)}%</text>`).join("")}</svg></div>`;
+  return `<div class="yield-chart"><svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-labelledby="yield-title-${country}"><title id="yield-title-${country}">${country} 국채 수익률곡선. 현재 만기별 수익률과 ${period} 값을 비교합니다.</title>${[0,1,2,3].map((i) => `<line x1="${xPad}" y1="${yPad + i * 58}" x2="${width-xPad}" y2="${yPad + i * 58}"/>`).join("")}<polyline class="curve-current" points="${points(current.yields)}" fill="none" vector-effect="non-scaling-stroke"/>${period !== "현재" && compare ? `<polyline class="curve-compare" points="${points(compare.yields)}" fill="none" vector-effect="non-scaling-stroke"/>` : ""}${current.yields.map((value,index) => `<circle class="curve-dot" cx="${xPad + index * ((width - xPad * 2) / 6)}" cy="${height-yPad-((value-min)/range)*(height-yPad*2)}" r="4"/><text x="${xPad + index * ((width - xPad * 2) / 6)}" y="${height-5}" text-anchor="middle">${current.maturities[index]}</text><text class="curve-value" x="${xPad + index * ((width - xPad * 2) / 6)}" y="${height-yPad-((value-min)/range)*(height-yPad*2)-10}" text-anchor="middle">${value.toFixed(2)}%</text>`).join("")}</svg></div>`;
 }
 
 function renderRatesMarket() {
@@ -629,8 +651,8 @@ function renderRatesMarket() {
   const bonds = bondMarketData.filter((item) => item.country === state.bondCountry);
   return `<div class="rates-overview">
     <section class="policy-rate-section">${sectionHeading("POLICY RATE", `기준금리 ${conceptTrigger("policy-rate")}`, '<span class="section-note">중앙은행이 정하는 정책의 기준</span>')}<div class="policy-rate-grid">${policyRates.map(([name,value,change,status,region,target]) => `<article class="policy-rate-card"><div>${regionMark(region)}<span>${region}</span>${conceptTrigger(region === "일본" ? "boj" : region === "유럽" ? "ecb" : region === "미국" ? "fomc" : "bok")}</div><h3>${name}</h3><strong>${value}</strong><small>${change} · ${status}</small><button data-node="${target}">정책 흐름 보기 ${icon("arrow", 13)}</button></article>`).join("")}</div></section>
-    <section class="bond-section">${sectionHeading("GOVERNMENT BONDS", `국채 시장 ${conceptTrigger("treasury")}`, '<span class="section-note">기준금리와 구분되는 시장 수익률</span>')}<div class="bond-country-tabs">${countries.map((country) => `<button class="${country === state.bondCountry ? "is-active" : ""}" data-action="bond-country" data-id="${country}">${country}</button>`).join("")}</div><div class="bond-grid">${bonds.map((bond) => `<article class="bond-card"><div class="bond-card-head">${regionMark(bond.country)}<span>${bond.country} · ${bond.bondType}</span><b>${bond.maturity}</b></div><div class="bond-title-line"><h3>${bond.maturity} 국채</h3>${conceptTrigger("bond-yield")}</div><div class="bond-value"><strong>${bond.yield.toFixed(2)}%</strong><span class="${bond.yieldChangeBp >= 0 ? "is-up" : "is-down"}">${bond.yieldChangeBp >= 0 ? "+" : ""}${bond.yieldChangeBp}bp</span></div>${miniLineSvg(bond.history, bond.yieldChangeBp >= 0 ? "is-up" : "is-down")}<div class="bond-flow"><span>현재 연결된 흐름</span>${flowTrail(bond.country === "미국" ? ["Fed 기대",`${bond.maturity} 국채`,"달러·자금조달"] : bond.country === "일본" ? ["BOJ",`${bond.maturity} JGB`,"엔화"] : ["기준금리",`${bond.maturity} 국채`,"금융여건"], true)}</div><div class="market-actions"><button class="text-button" data-node="${bond.relatedNode}">왜 움직였지?</button><button class="primary-button ghost small" data-node="${bond.relatedNode}">경제지도에서 보기</button></div><div class="bond-concept-link">${conceptTrigger("treasury", "국채가 뭐예요?")}<span>${icon("clock", 12)} ${bond.updatedAt}</span></div></article>`).join("")}</div></section>
-    <section class="yield-curve-card"><div class="yield-toolbar"><div><p class="section-kicker">YIELD CURVE</p><h2>수익률곡선 ${conceptTrigger("yield-curve")}</h2><p>만기별 국채 수익률의 높이와 기울기를 비교해 보세요.</p></div><div><div class="bond-country-tabs">${countries.map((country) => `<button class="${country === state.curveCountry ? "is-active" : ""}" data-action="curve-country" data-id="${country}">${country}</button>`).join("")}</div><div class="curve-period-tabs">${["현재","1개월 전","1년 전"].map((period) => `<button class="${period === state.curvePeriod ? "is-active" : ""}" data-action="curve-period" data-id="${period}">${period}</button>`).join("")}</div></div></div>${yieldCurveSvg(state.curveCountry, state.curvePeriod)}<div class="yield-legend"><span><i></i>현재</span>${state.curvePeriod !== "현재" ? `<span><i></i>${state.curvePeriod}</span>` : ""}<p>${icon("info", 13)} 경제 상황을 이해하기 위한 Mock 시각화이며 미래를 예측하지 않습니다.</p></div></section>
+    <section class="bond-section">${sectionHeading("GOVERNMENT BONDS", `국채 시장 ${conceptTrigger("treasury")}`, '<span class="section-note">기준금리와 구분되는 시장 수익률</span>')}<div class="bond-country-tabs" role="group" aria-label="국채 국가 선택">${countries.map((country) => `<button class="${country === state.bondCountry ? "is-active" : ""}" data-action="bond-country" data-id="${country}" aria-pressed="${country === state.bondCountry}">${country}</button>`).join("")}</div><div class="bond-grid">${bonds.map((bond) => `<article class="bond-card"><div class="bond-card-head">${regionMark(bond.country)}<span>${bond.country} · ${bond.bondType}</span><b>${bond.maturity}</b></div><div class="bond-title-line"><h3>${bond.maturity} 국채</h3>${conceptTrigger("bond-yield")}</div><div class="bond-value"><strong>${bond.yield.toFixed(2)}%</strong><span class="${bond.yieldChangeBp >= 0 ? "is-up" : "is-down"}">${bond.yieldChangeBp >= 0 ? "+" : ""}${bond.yieldChangeBp}bp</span></div>${miniLineSvg(bond.history, bond.yieldChangeBp >= 0 ? "is-up" : "is-down")}<div class="bond-flow"><span>현재 연결된 흐름</span>${flowTrail(bond.country === "미국" ? ["Fed 기대",`${bond.maturity} 국채`,"달러·자금조달"] : bond.country === "일본" ? ["BOJ",`${bond.maturity} JGB`,"엔화"] : ["기준금리",`${bond.maturity} 국채`,"금융여건"], true)}</div><div class="market-actions"><button class="text-button" data-node="${bond.relatedNode}">왜 움직였지?</button><button class="primary-button ghost small" data-node="${bond.relatedNode}">경제지도에서 보기</button></div><div class="bond-concept-link">${conceptTrigger("treasury", "국채가 뭐예요?")}<span>${icon("clock", 12)} ${bond.updatedAt}</span></div></article>`).join("")}</div></section>
+    <section class="yield-curve-card"><div class="yield-toolbar"><div><p class="section-kicker">YIELD CURVE</p><h2>수익률곡선 ${conceptTrigger("yield-curve")}</h2><p>만기별 국채 수익률의 높이와 기울기를 비교해 보세요.</p></div><div><div class="bond-country-tabs" role="group" aria-label="수익률곡선 국가 선택">${countries.map((country) => `<button class="${country === state.curveCountry ? "is-active" : ""}" data-action="curve-country" data-id="${country}" aria-pressed="${country === state.curveCountry}">${country}</button>`).join("")}</div><div class="curve-period-tabs" role="group" aria-label="비교 기간 선택">${["현재","1개월 전","1년 전"].map((period) => `<button class="${period === state.curvePeriod ? "is-active" : ""}" data-action="curve-period" data-id="${period}" aria-pressed="${period === state.curvePeriod}">${period}</button>`).join("")}</div></div></div>${yieldCurveSvg(state.curveCountry, state.curvePeriod)}<div class="yield-legend"><span><i></i>현재</span>${state.curvePeriod !== "현재" ? `<span><i></i>${state.curvePeriod}</span>` : ""}<p>${icon("info", 13)} 경제 상황을 이해하기 위한 Mock 시각화이며 미래를 예측하지 않습니다.</p></div></section>
   </div>`;
 }
 
@@ -642,8 +664,8 @@ function renderMarket() {
       <section class="page-hero compact"><div><p class="section-kicker">MARKET, WITH CONTEXT</p><h1>시장의 숫자보다<br><em>숫자 사이의 연결</em>을 보세요.</h1><p>가격과 지표는 출발점이에요. 왜 움직였는지, 어떤 경제 흐름과 관련되는지 함께 확인하세요.</p></div><div class="market-hero-art"><span class="art-line l1"></span><span class="art-line l2"></span><span class="art-dot d1"></span><span class="art-dot d2"></span><span class="art-dot d3"></span><strong>MARKET<br>CONTEXT</strong></div></section>
       <section class="market-summary-bar"><div><span>시장 업데이트</span><strong>09월 23일 · 10:20</strong></div><div><span>주요 흐름</span><strong>금리 기대 · 국채 · 환율 · AI</strong></div><div><span>데이터 기준</span><strong>15분 지연 Mock</strong></div><p>${icon("info", 15)} 실제 투자 판단용 데이터가 아니에요.</p></section>
       <section class="section-block market-section">
-        <div class="tab-row" role="tablist">${marketCategories.map(([id, name]) => `<button class="tab-button ${id === state.marketCategory ? "is-active" : ""}" data-action="market-tab" data-id="${id}">${name}</button>`).join("")}</div>
-        ${state.marketCategory === "rates" ? renderRatesMarket() : `${sectionHeading("MARKET DATA", label, '<span class="section-note">변화의 좋고 나쁨이 아닌 연결 경로를 확인해 보세요</span>')}<div class="market-grid">${items.map(renderMarketCard).join("")}</div>`}
+        <div class="tab-row" role="tablist" aria-label="시장 데이터 분류">${marketCategories.map(([id, name]) => `<button id="market-tab-${id}" role="tab" aria-selected="${id === state.marketCategory}" tabindex="${id === state.marketCategory ? "0" : "-1"}" class="tab-button ${id === state.marketCategory ? "is-active" : ""}" data-action="market-tab" data-id="${id}">${name}</button>`).join("")}</div>
+        <div class="market-tab-panel" role="tabpanel" aria-labelledby="market-tab-${state.marketCategory}">${state.marketCategory === "rates" ? renderRatesMarket() : `${sectionHeading("MARKET DATA", label, '<span class="section-note">변화의 좋고 나쁨이 아닌 연결 경로를 확인해 보세요</span>')}<div class="market-grid">${items.map(renderMarketCard).join("")}</div>`}</div>
       </section>
       <section class="company-callout"><div><span class="company-logo">S</span><div><p class="section-kicker">COMPANY CONTEXT</p><h2>숫자와 연결된 기업도 살펴보세요.</h2><p>AI 투자, 메모리, 환율 흐름이 삼성전자와 어떻게 연결되는지 정리했어요.</p></div></div><a href="#/company/samsung" class="primary-button">삼성전자 보기 ${icon("arrow", 16)}</a></section>
     </main>`;
@@ -656,7 +678,7 @@ function eventCard(event) {
   return `<article class="event-card importance-${event.importance}">
     <div class="event-date"><strong>${event.dayLabel}</strong><span>${event.time}</span></div>
     <div class="event-body"><div class="event-meta">${regionMark(event.region)}<span>${event.region}</span><i>${event.type}</i><b class="event-status-pill is-${event.releaseState.toLowerCase()}">${event.releaseState} · ${stateLabels[event.releaseState]}</b></div><div class="event-title-line"><h3>${event.title}</h3>${event.conceptId ? conceptTrigger(event.conceptId) : ""}</div><div class="event-explainer"><span>뭐 하는 날이에요?</span><p>${event.explainer}</p></div>${isReleased ? `<div class="release-result"><span>결과가 발표됐어요</span><strong>${event.resultLabel || event.currentValue}</strong><small>이전 ${event.previousValue || "-"} → 이번 ${event.currentValue || "-"}</small></div>` : `<div class="release-preview"><span>이전 결과</span><strong>${event.previousValue || "공식 발표 전"}</strong><small>${event.relatedIndicator || "관련 지표 확인"}</small></div>`}${flowTrail(event.flow, true)}<p><b>왜 중요해요?</b><br>${event.why}</p><div class="event-source">${icon("source", 14)} ${event.source} · ${event.updatedAt}</div></div>
-    <div class="event-actions"><button class="secondary-button" data-event="${event.id}">${isReleased ? "발표 결과 보기" : "왜 중요한가?"}</button><button class="text-button" data-node="${event.nodeId}">경제 흐름 보기 ${icon("arrow", 14)}</button><button class="watch-icon ${watched ? "is-watched" : ""}" data-action="watch-event" data-id="${event.id}" title="일정 지켜보기">${icon(watched ? "check" : "bell", 17)}</button></div>
+    <div class="event-actions"><button class="secondary-button" data-event="${event.id}">${isReleased ? "발표 결과 보기" : "왜 중요한가?"}</button><button class="text-button" data-node="${event.nodeId}">경제 흐름 보기 ${icon("arrow", 14)}</button><button class="watch-icon ${watched ? "is-watched" : ""}" data-action="watch-event" data-id="${event.id}" aria-pressed="${watched}" aria-label="${event.title} ${watched ? "지켜보기 해제" : "지켜보기"}">${icon(watched ? "check" : "bell", 17)}</button></div>
   </article>`;
 }
 
@@ -675,7 +697,7 @@ function renderCalendar() {
   return `
     <main class="page content-width standard-page calendar-page">
       <section class="page-hero calendar-hero"><div><p class="section-kicker">GLOBAL ECONOMIC CALENDAR</p><h1>앞으로 세계 경제에서<br><em>무엇을 봐야 할까요?</em></h1><p>발표일만 나열하지 않았어요. 일정이 어떤 흐름과 연결되는지 함께 확인하세요.</p></div><div class="next-event-card"><span>다음 중요 일정</span><strong>8일 후</strong><h3>BOJ Summary of Opinions</h3><p>10월 1일 · 일본</p><button data-event="boj-opinions">미리 보기 ${icon("arrow", 14)}</button></div></section>
-      <section class="calendar-controls"><div class="view-switch"><button class="${state.calendarView === "upcoming" ? "is-active" : ""}" data-action="calendar-view" data-id="upcoming">다가오는 일정</button><button class="${state.calendarView === "month" ? "is-active" : ""}" data-action="calendar-view" data-id="month">월간 보기</button></div><div class="region-filter">${regions.map((region) => `<button class="${region === state.calendarRegion ? "is-active" : ""}" data-action="calendar-region" data-id="${region}">${region}</button>`).join("")}</div><div class="month-title"><button aria-label="이전 달">${icon("back", 16)}</button><strong>2026년 10월</strong><button aria-label="다음 달">${icon("chevron", 16)}</button></div></section>
+      <section class="calendar-controls"><div class="view-switch" role="group" aria-label="캘린더 보기 방식"><button class="${state.calendarView === "upcoming" ? "is-active" : ""}" data-action="calendar-view" data-id="upcoming" aria-pressed="${state.calendarView === "upcoming"}">다가오는 일정</button><button class="${state.calendarView === "month" ? "is-active" : ""}" data-action="calendar-view" data-id="month" aria-pressed="${state.calendarView === "month"}">월간 보기</button></div><div class="region-filter" role="group" aria-label="지역 필터">${regions.map((region) => `<button class="${region === state.calendarRegion ? "is-active" : ""}" data-action="calendar-region" data-id="${region}" aria-pressed="${region === state.calendarRegion}">${region}</button>`).join("")}</div><div class="month-title"><strong>2026년 10월</strong></div></section>
       <section class="calendar-content">${state.calendarView === "month" ? renderMonthCalendar(events) : `<div class="upcoming-layout"><div class="date-rail"><span>SEP<strong>23</strong>오늘</span><i></i><span>OCT<strong>01</strong>8일 후</span><i></i><span>OCT<strong>30</strong>37일 후</span></div><div class="event-list">${events.map(eventCard).join("")}</div><aside class="calendar-aside"><div class="watch-summary"><span>${icon("bell", 20)}</span><h3>지켜보는 일정</h3><strong>${state.watchItems.filter((id) => economicEvents.some((event) => event.id === id)).length}개</strong><p>알림 기능은 mock 상태예요.<br>관심 일정은 MY에도 저장됩니다.</p><a href="#/my">MY에서 보기 ${icon("arrow", 14)}</a></div><div class="calendar-legend"><h4>발표 상태</h4><span><i class="confirmed"></i>UPCOMING · 예정</span><span><i class="live"></i>LIVE · 진행 중</span><span><i class="released"></i>RELEASED · 발표 완료</span><span><i class="updated"></i>UPDATED · 추가 자료</span></div></aside></div>`}</section>
     </main>`;
 }
@@ -701,12 +723,12 @@ function chartSvg(values) {
   const min = Math.min(...values), max = Math.max(...values), width = 680, height = 220;
   const points = values.map((value, index) => `${(index / (values.length - 1)) * width},${height - ((value - min) / (max - min)) * (height - 34) - 14}`).join(" ");
   const area = `0,${height} ${points} ${width},${height}`;
-  return `<svg class="price-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="삼성전자 mock 가격 차트"><defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4e6658" stop-opacity=".22"/><stop offset="1" stop-color="#4e6658" stop-opacity="0"/></linearGradient></defs><line x1="0" y1="55" x2="680" y2="55"/><line x1="0" y1="110" x2="680" y2="110"/><line x1="0" y1="165" x2="680" y2="165"/><polygon points="${area}" fill="url(#chartFill)"/><polyline points="${points}" fill="none" stroke="#354b40" stroke-width="3" vector-effect="non-scaling-stroke"/><circle cx="680" cy="${height - ((values.at(-1) - min) / (max - min)) * (height - 34) - 14}" r="5" fill="#354b40"/></svg>`;
+  return `<svg class="price-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-labelledby="company-chart-title"><title id="company-chart-title">삼성전자 최근 3개월 mock 가격 흐름</title><defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4e6658" stop-opacity=".22"/><stop offset="1" stop-color="#4e6658" stop-opacity="0"/></linearGradient></defs><line x1="0" y1="55" x2="680" y2="55"/><line x1="0" y1="110" x2="680" y2="110"/><line x1="0" y1="165" x2="680" y2="165"/><polygon points="${area}" fill="url(#chartFill)"/><polyline points="${points}" fill="none" stroke="#354b40" stroke-width="3" vector-effect="non-scaling-stroke"/><circle cx="680" cy="${height - ((values.at(-1) - min) / (max - min)) * (height - 34) - 14}" r="5" fill="#354b40"/></svg>`;
 }
 
 function companyTabContent(company) {
   if (state.companyTab === "financials") return `<div class="company-table"><div><span>구분</span><b>2024</b><b>2025E</b><b>2026E</b></div><div><span>매출</span><b>258.9조</b><b>286.4조</b><b>312.1조</b></div><div><span>영업이익</span><b>32.1조</b><b>39.8조</b><b>46.2조</b></div><div><span>영업이익률</span><b>12.4%</b><b>13.9%</b><b>14.8%</b></div><p>모든 수치는 UI 시연을 위한 mock data입니다.</p></div>`;
-  if (state.companyTab === "disclosures") return `<div class="disclosure-list">${company.disclosures.map(([date, title, source]) => `<div><span>${date}</span><strong>${title}</strong><b>${source}</b><button>${icon("chevron", 15)}</button></div>`).join("")}</div>`;
+  if (state.companyTab === "disclosures") return `<div class="disclosure-list">${company.disclosures.map(([date, title, source]) => `<div><span>${date}</span><strong>${title}</strong><b>${source}</b><span class="disclosure-more" aria-hidden="true">${icon("chevron", 15)}</span></div>`).join("")}</div>`;
   if (state.companyTab === "news") return `<div class="news-context-list"><article><span>AI · 반도체</span><h3>고성능 메모리 공급 계획을 둘러싼 시장의 관심</h3><p>단일 기사보다 AI 투자 → 데이터센터 → 메모리 수요 경로와 함께 보여줍니다.</p></article><article><span>환율 · 수출</span><h3>원/달러 변동이 실적에 연결되는 두 방향</h3><p>수출 환산 효과와 수입 비용이 동시에 작용할 수 있어요.</p></article></div>`;
   return `<div class="company-overview-grid">${company.metrics.map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong><small>Mock · 최근 기준</small></div>`).join("")}</div>`;
 }
@@ -715,10 +737,10 @@ function renderCompany(id = "samsung") {
   const company = companies[id] || companies.samsung;
   return `<main class="page content-width standard-page company-page">
     <a href="#/market" class="page-back">${icon("back", 16)} 시장으로 돌아가기</a>
-    <section class="company-header"><div class="company-identity"><span class="company-logo large">S</span><div><p>${company.code}</p><h1>${company.name}</h1><span>${company.description}</span></div></div><div class="company-price"><span>현재가 · Mock</span><strong>${company.price}</strong><b>${company.change}</b><small>${company.updated}</small></div><div class="company-header-actions"><button class="icon-action ${state.interests.includes("samsung") ? "is-active" : ""}" data-action="interest-toggle" data-id="samsung">${icon("heart", 18, state.interests.includes("samsung"))}</button><button class="primary-button" data-node="samsung">경제지도에서 보기 ${icon("arrow", 15)}</button></div></section>
-    <section class="company-main-grid"><div class="chart-card"><div class="card-title-row"><div><span class="section-kicker">PRICE CONTEXT</span><h2>가격 흐름</h2></div><div class="range-tabs"><button>1일</button><button>1주</button><button class="is-active">3개월</button><button>1년</button></div></div>${chartSvg(company.chart)}<div class="chart-axis"><span>06.23</span><span>07.23</span><span>08.23</span><span>09.23</span></div></div><aside class="company-flow-card"><span class="section-kicker">CONNECTED FLOW</span><h2>현재 연결된<br>경제 흐름</h2>${company.flows.map((flow) => `<button data-node="${flow.target}"><span>${flow.label}</span>${flowTrail(flow.nodes, true)}<b>흐름 보기 ${icon("arrow", 14)}</b></button>`).join("")}</aside></section>
+    <section class="company-header"><div class="company-identity"><span class="company-logo large">S</span><div><p>${company.code}</p><h1>${company.name}</h1><span>${company.description}</span></div></div><div class="company-price"><span>현재가 · Mock</span><strong>${company.price}</strong><b>${company.change}</b><small>${company.updated}</small></div><div class="company-header-actions"><button class="icon-action ${state.interests.includes("samsung") ? "is-active" : ""}" data-action="interest-toggle" data-id="samsung" aria-pressed="${state.interests.includes("samsung")}" aria-label="삼성전자 ${state.interests.includes("samsung") ? "관심 해제" : "관심 등록"}">${icon("heart", 18, state.interests.includes("samsung"))}</button><button class="primary-button" data-node="samsung">경제지도에서 보기 ${icon("arrow", 15)}</button></div></section>
+    <section class="company-main-grid"><div class="chart-card"><div class="card-title-row"><div><span class="section-kicker">PRICE CONTEXT</span><h2>가격 흐름</h2></div><div class="range-tabs"><span class="is-active">최근 3개월</span></div></div>${chartSvg(company.chart)}<div class="chart-axis"><span>06.23</span><span>07.23</span><span>08.23</span><span>09.23</span></div></div><aside class="company-flow-card"><span class="section-kicker">CONNECTED FLOW</span><h2>현재 연결된<br>경제 흐름</h2>${company.flows.map((flow) => `<button data-node="${flow.target}"><span>${flow.label}</span>${flowTrail(flow.nodes, true)}<b>흐름 보기 ${icon("arrow", 14)}</b></button>`).join("")}</aside></section>
     <section class="company-variable-section">${sectionHeading("ECONOMIC VARIABLES", "이 기업과 연결된 경제 변수", `<span class="section-note">${conceptTrigger("per", "PER")}${conceptTrigger("pbr", "PBR")}${conceptTrigger("eps", "EPS")}</span>`)}<p class="company-variable-intro">하나의 변수가 실적이나 주가를 결정하지 않아요. 현재 확인할 수 있는 주요 연결과 전달 경로를 함께 보여드려요.</p><div class="company-variable-grid">${companyVariables.map((variable) => `<article class="company-variable-card"><span>0${Number(variable.id.split("-").at(-1))}</span><h3>${variable.name}</h3><p>${variable.explanation}</p><div><button class="text-button" data-node="${variable.nodeId}">왜 연결되나요?</button><button class="primary-button ghost small" data-node="${variable.nodeId}">경제지도에서 보기 ${icon("arrow", 13)}</button></div></article>`).join("")}</div></section>
-    <section class="company-detail-section"><div class="tab-row">${[["overview", "기업정보"], ["financials", "재무·실적"], ["disclosures", "공시"], ["news", "관련 뉴스"]].map(([tab, label]) => `<button class="tab-button ${state.companyTab === tab ? "is-active" : ""}" data-action="company-tab" data-id="${tab}">${label}</button>`).join("")}</div>${companyTabContent(company)}</section>
+    <section class="company-detail-section"><div class="tab-row" role="tablist" aria-label="기업 상세 분류">${[["overview", "기업정보"], ["financials", "재무·실적"], ["disclosures", "공시"], ["news", "관련 뉴스"]].map(([tab, label]) => `<button id="company-tab-${tab}" role="tab" aria-selected="${state.companyTab === tab}" tabindex="${state.companyTab === tab ? "0" : "-1"}" class="tab-button ${state.companyTab === tab ? "is-active" : ""}" data-action="company-tab" data-id="${tab}">${label}</button>`).join("")}</div><div role="tabpanel" aria-labelledby="company-tab-${state.companyTab}">${companyTabContent(company)}</div></section>
     <div class="data-disclaimer">${icon("info", 15)} 이 페이지의 가격·재무 수치는 UI 테스트용 mock data이며, 투자 추천이나 매수·매도 판단을 제공하지 않습니다.</div>
   </main>`;
 }
@@ -746,7 +768,7 @@ function renderConceptPopover() {
   if (!state.conceptPopover) return "";
   const item = concepts[state.conceptPopover];
   if (!item) return "";
-  return `<div class="concept-popover" data-action="concept-close"><article class="concept-popover-card" data-modal-stop><button class="popover-close" data-action="concept-close">${icon("close", 15)}</button><span class="section-kicker">ECONOMIC CONCEPT</span><h2>${item.name}, 무엇인가요?</h2><p>${item.shortDescription}</p><button class="primary-button" data-action="concept-detail" data-id="${item.id}">30초 만에 이해하기 ${icon("arrow", 14)}</button></article></div>`;
+  return `<div class="concept-popover" data-action="concept-close"><article class="concept-popover-card" role="dialog" aria-modal="true" aria-label="${item.name} 개념 설명" data-modal-stop><button class="popover-close" data-action="concept-close" aria-label="개념 설명 닫기">${icon("close", 15)}</button><span class="section-kicker">ECONOMIC CONCEPT</span><h2>${item.name}, 무엇인가요?</h2><p>${item.shortDescription}</p><button class="primary-button" data-action="concept-detail" data-id="${item.id}">30초 만에 이해하기 ${icon("arrow", 14)}</button></article></div>`;
 }
 
 function renderInsightModal() {
@@ -757,7 +779,7 @@ function renderInsightModal() {
   if (!issue || !insight) return "";
   const isWhy = mode === "why";
   const rows = isWhy ? insight.factors : insight.impacts;
-  return `<div class="modal-backdrop insight-backdrop" data-action="insight-close"><section class="insight-modal" data-modal-stop><button class="modal-close" data-action="insight-close">${icon("close", 18)}</button><p class="section-kicker">${isWhy ? "WHY · RELATED FACTORS" : "IMPACT · TRANSMISSION PATHS"}</p><h2>${issue.title}</h2><p class="insight-lead">${isWhy ? "현재 함께 확인할 수 있는 주요 관련 요인이에요." : "이 변화가 영향을 전달할 수 있는 영역이에요. 미래 결과를 예측하지 않습니다."}</p><div class="insight-factor-list">${rows.map((row,index) => `<button data-node="${row[2] || row[1]}"><span>0${index+1}</span><div><strong>${row[0]}</strong><small>${isWhy ? row[1] : "선택하면 이 노드가 중심이 되어 경제지도가 다시 펼쳐져요."}</small></div>${icon("arrow", 15)}</button>`).join("")}</div><div class="insight-notice">${icon("info", 15)}<p>시장 움직임을 하나의 원인으로 설명하기는 어렵습니다. EconFlow는 현재 확인 가능한 주요 관련 요인과 전달 경로를 함께 보여드립니다.</p></div><button class="primary-button insight-map-button" data-node="${issue.nodeId}">경제지도에서 전체 흐름 보기 ${icon("arrow", 15)}</button></section></div>`;
+  return `<div class="modal-backdrop insight-backdrop" data-action="insight-close"><section class="insight-modal" role="dialog" aria-modal="true" aria-label="${issue.title} ${isWhy ? "관련 요인" : "영향 경로"}" data-modal-stop><button class="modal-close" data-action="insight-close" aria-label="상세 설명 닫기">${icon("close", 18)}</button><p class="section-kicker">${isWhy ? "WHY · RELATED FACTORS" : "IMPACT · TRANSMISSION PATHS"}</p><h2>${issue.title}</h2><p class="insight-lead">${isWhy ? "현재 함께 확인할 수 있는 주요 관련 요인이에요." : "이 변화가 영향을 전달할 수 있는 영역이에요. 미래 결과를 예측하지 않습니다."}</p><div class="insight-factor-list">${rows.map((row,index) => `<button data-node="${row[2] || row[1]}"><span>0${index+1}</span><div><strong>${row[0]}</strong><small>${isWhy ? row[1] : "선택하면 이 노드가 중심이 되어 경제지도가 다시 펼쳐져요."}</small></div>${icon("arrow", 15)}</button>`).join("")}</div><div class="insight-notice">${icon("info", 15)}<p>시장 움직임을 하나의 원인으로 설명하기는 어렵습니다. EconFlow는 현재 확인 가능한 주요 관련 요인과 전달 경로를 함께 보여드립니다.</p></div><button class="primary-button insight-map-button" data-node="${issue.nodeId}">경제지도에서 전체 흐름 보기 ${icon("arrow", 15)}</button></section></div>`;
 }
 
 function filterSearch(query) {
@@ -792,14 +814,26 @@ function renderEventModal() {
   if (!event) return "";
   const watched = state.watchItems.includes(event.id);
   const released = ["RELEASED","UPDATED"].includes(event.releaseState);
-  return `<div class="modal-backdrop event-backdrop" data-action="event-close"><aside class="event-modal" role="dialog" aria-modal="true" data-modal-stop><button class="modal-close" data-action="event-close">${icon("close", 19)}</button><div class="event-modal-top">${regionMark(event.region)}<span>${event.region} · ${event.type}</span><b class="event-status-pill is-${event.releaseState.toLowerCase()}">${event.releaseState}</b></div><p class="section-kicker">${event.dayLabel} · ${event.time}</p><div class="event-modal-title"><h2>${event.title}</h2>${event.conceptId ? conceptTrigger(event.conceptId) : ""}</div><div class="event-what-day"><span>뭐 하는 날이에요?</span><p>${event.explainer}</p></div>${released ? `<div class="event-release-panel"><span>${icon("check",16)} 결과가 발표됐어요</span><div><p>이전<strong>${event.previousValue || "-"}</strong></p><i>${icon("arrow",16)}</i><p>이번<strong>${event.currentValue || "-"}</strong></p><b>${event.resultLabel || "업데이트"}</b></div><small>${event.releasedAt} · ${event.updatedAt} 업데이트</small></div><div class="event-why"><span class="framework-label what">WHAT</span><h3>무엇이 발표됐나요?</h3><p>${event.whatReleased}</p></div><div class="event-why"><span class="framework-label why">WHY</span><h3>관련 배경</h3><p>${event.background}</p></div><div class="event-modal-flow"><span class="framework-label impact">IMPACT</span><h3>연결될 수 있는 영역</h3>${flowTrail(event.impact || event.flow)}</div>` : `<div class="event-preview-panel"><div><span>예정 시각</span><strong>${event.dayLabel} · ${event.time}</strong></div><div><span>이전 결과</span><strong>${event.previousValue || "-"}</strong></div><div><span>관련 경제지표</span><strong>${event.relatedIndicator || event.flow[0]}</strong></div></div><div class="event-why"><span class="framework-label why">WHY</span><h3>왜 중요한가요?</h3><p>${event.why}</p></div><div class="event-modal-flow"><span class="framework-label impact">FLOW</span><h3>관련 경제 흐름</h3>${flowTrail(event.flow)}</div><div class="event-watch-list"><span>발표에서 함께 확인할 것</span><ul><li>이전 결과와 달라진 수치</li><li>정책 설명과 전망의 변화</li><li>연결된 금리·환율 데이터</li></ul></div>`}<div class="event-modal-source">${icon("source", 16)}<span><strong>${event.source}</strong><small>공식 일정·발표 우선 · ${APP_DATE} 확인 기준</small></span></div><div class="event-modal-actions"><button class="secondary-button ${watched ? "is-watched" : ""}" data-action="watch-event" data-id="${event.id}">${icon(watched ? "check" : "bell", 16)} ${watched ? "지켜보는 중" : "일정 지켜보기"}</button><button class="primary-button" data-node="${event.nodeId}">경제 흐름 보기 ${icon("arrow", 15)}</button></div></aside></div>`;
+  return `<div class="modal-backdrop event-backdrop" data-action="event-close"><aside class="event-modal" role="dialog" aria-modal="true" aria-label="${event.title} 일정 상세" data-modal-stop><button class="modal-close" data-action="event-close" aria-label="일정 상세 닫기">${icon("close", 19)}</button><div class="event-modal-top">${regionMark(event.region)}<span>${event.region} · ${event.type}</span><b class="event-status-pill is-${event.releaseState.toLowerCase()}">${event.releaseState}</b></div><p class="section-kicker">${event.dayLabel} · ${event.time}</p><div class="event-modal-title"><h2>${event.title}</h2>${event.conceptId ? conceptTrigger(event.conceptId) : ""}</div><div class="event-what-day"><span>뭐 하는 날이에요?</span><p>${event.explainer}</p></div>${released ? `<div class="event-release-panel"><span>${icon("check",16)} 결과가 발표됐어요</span><div><p>이전<strong>${event.previousValue || "-"}</strong></p><i>${icon("arrow",16)}</i><p>이번<strong>${event.currentValue || "-"}</strong></p><b>${event.resultLabel || "업데이트"}</b></div><small>${event.releasedAt} · ${event.updatedAt} 업데이트</small></div><div class="event-why"><span class="framework-label what">WHAT</span><h3>무엇이 발표됐나요?</h3><p>${event.whatReleased}</p></div><div class="event-why"><span class="framework-label why">WHY</span><h3>관련 배경</h3><p>${event.background}</p></div><div class="event-modal-flow"><span class="framework-label impact">IMPACT</span><h3>연결될 수 있는 영역</h3>${flowTrail(event.impact || event.flow)}</div>` : `<div class="event-preview-panel"><div><span>예정 시각</span><strong>${event.dayLabel} · ${event.time}</strong></div><div><span>이전 결과</span><strong>${event.previousValue || "-"}</strong></div><div><span>관련 경제지표</span><strong>${event.relatedIndicator || event.flow[0]}</strong></div></div><div class="event-why"><span class="framework-label why">WHY</span><h3>왜 중요한가요?</h3><p>${event.why}</p></div><div class="event-modal-flow"><span class="framework-label impact">FLOW</span><h3>관련 경제 흐름</h3>${flowTrail(event.flow)}</div><div class="event-watch-list"><span>발표에서 함께 확인할 것</span><ul><li>이전 결과와 달라진 수치</li><li>정책 설명과 전망의 변화</li><li>연결된 금리·환율 데이터</li></ul></div>`}<div class="event-modal-source">${icon("source", 16)}<span><strong>${event.source}</strong><small>공식 일정·발표 우선 · ${APP_DATE} 확인 기준</small></span></div><div class="event-modal-actions"><button class="secondary-button ${watched ? "is-watched" : ""}" data-action="watch-event" data-id="${event.id}">${icon(watched ? "check" : "bell", 16)} ${watched ? "지켜보는 중" : "일정 지켜보기"}</button><button class="primary-button" data-node="${event.nodeId}">경제 흐름 보기 ${icon("arrow", 15)}</button></div></aside></div>`;
 }
 
 function renderFooter() {
   return `<footer class="app-footer"><div class="content-width"><div class="brand muted"><span class="brand-mark"><span></span><span></span><span></span></span><span>EconFlow</span></div><p>복잡한 경제를 연결해서, 이해하기 쉽게.</p><span>Prototype · Mock data only</span></div></footer>`;
 }
 
+function focusSelectorFor(element) {
+  if (!element || element === document.body || !element.matches) return "";
+  if (element.id) return `#${CSS.escape(element.id)}`;
+  const attributes = ["data-action", "data-id", "data-event", "data-concept", "data-insight", "data-edge", "data-node"];
+  const selector = attributes
+    .filter((attribute) => element.hasAttribute(attribute))
+    .map((attribute) => `[${attribute}="${CSS.escape(element.getAttribute(attribute))}"]`)
+    .join("");
+  return selector ? `${element.tagName.toLowerCase()}${selector}` : "";
+}
+
 function render() {
+  const activeSelector = focusSelectorFor(document.activeElement);
   const route = parseRoute();
   const validPages = ["today", "explore", "market", "calendar", "my", "company", "concept"];
   const page = validPages.includes(route.page) ? route.page : "today";
@@ -819,11 +853,51 @@ function render() {
   if (page === "my") content = renderMy();
   if (page === "company") content = renderCompany(route.id || "samsung");
   if (page === "concept") content = renderConceptPage(route.id || "inflation");
-  app.innerHTML = `${renderHeader(page)}${content}${page === "explore" ? "" : renderFooter()}${renderSearchModal()}${renderEventModal()}${renderConceptPopover()}${renderInsightModal()}${page === "explore" ? `${renderRelationshipPopup()}${renderNodeDetailModal()}` : ""}${state.toast ? `<div class="toast">${icon("check", 16)} ${state.toast}</div>` : ""}`;
-  document.body.classList.toggle("has-modal", state.searchOpen || Boolean(state.modalEvent) || Boolean(state.conceptPopover) || Boolean(state.insightModal) || (page === "explore" && Boolean(state.selectedEdge || state.detailNode)));
-  if (state.searchOpen) requestAnimationFrame(() => document.querySelector("#global-search-input")?.focus());
+  const dialogKey = state.searchOpen
+    ? "search"
+    : state.modalEvent
+      ? `event:${state.modalEvent}`
+      : state.conceptPopover
+        ? `concept:${state.conceptPopover}`
+        : state.insightModal
+          ? `insight:${state.insightModal}`
+          : page === "explore" && state.selectedEdge
+            ? `edge:${state.selectedEdge}`
+            : page === "explore" && state.detailNode
+              ? `detail:${state.detailNode}`
+              : "";
+  const dialogOpen = Boolean(dialogKey);
+  const dialogOpened = dialogOpen && render.dialogKey !== dialogKey;
+  const dialogClosed = !dialogOpen && Boolean(render.dialogKey);
+  if (dialogOpened && activeSelector && !render.returnFocus) render.returnFocus = activeSelector;
+  app.innerHTML = `${renderHeader(page)}${content}${page === "explore" ? "" : renderFooter()}${renderSearchModal()}${renderEventModal()}${renderConceptPopover()}${renderInsightModal()}${page === "explore" ? `${renderRelationshipPopup()}${renderNodeDetailModal()}` : ""}${state.toast ? `<div class="toast" role="status" aria-live="polite">${icon("check", 16)} ${state.toast}</div>` : ""}`;
+  const main = app.querySelector("main");
+  if (main) {
+    main.id = "main-content";
+    main.tabIndex = -1;
+  }
+  document.body.classList.toggle("has-modal", dialogOpen);
+  if (dialogOpen) {
+    app.querySelectorAll(".app-header, main, .app-footer").forEach((element) => { element.inert = true; });
+  }
+  requestAnimationFrame(() => {
+    if (dialogOpened) {
+      const dialog = app.querySelector('[role="dialog"][aria-modal="true"]');
+      const firstControl = state.searchOpen
+        ? app.querySelector("#global-search-input")
+        : dialog?.querySelector("button:not([disabled]), input:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])");
+      firstControl?.focus();
+    } else if (dialogClosed) {
+      const returnTarget = render.returnFocus ? app.querySelector(render.returnFocus) : null;
+      returnTarget?.focus();
+      render.returnFocus = "";
+    } else if (!routeChanged && activeSelector) {
+      app.querySelector(activeSelector)?.focus();
+    }
+  });
   if (routeChanged) window.scrollTo({ top: 0, behavior: "instant" });
   render.lastRoute = routeKey;
+  render.dialogKey = dialogKey;
 }
 
 function toggleListItem(list, id) {
@@ -840,6 +914,10 @@ document.addEventListener("click", (event) => {
   const conceptButton = event.target.closest("[data-concept]");
   if (conceptButton) {
     state.conceptPopover = conceptButton.dataset.concept;
+    state.modalEvent = null;
+    state.insightModal = null;
+    state.selectedEdge = null;
+    state.detailNode = null;
     render();
     return;
   }
@@ -902,6 +980,11 @@ document.addEventListener("click", (event) => {
   if (action === "search-open") {
     state.searchOpen = true;
     state.searchQuery = "";
+    state.modalEvent = null;
+    state.conceptPopover = null;
+    state.insightModal = null;
+    state.selectedEdge = null;
+    state.detailNode = null;
     render();
   } else if (action === "search-close") {
     state.searchOpen = false;
@@ -1043,9 +1126,41 @@ document.addEventListener("submit", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  const activeTab = event.target.closest?.('[role="tab"]');
+  if (activeTab && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+    const tabs = [...activeTab.closest('[role="tablist"]').querySelectorAll('[role="tab"]')];
+    const currentIndex = tabs.indexOf(activeTab);
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? tabs.length - 1
+        : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault();
+    tabs[nextIndex].focus();
+    tabs[nextIndex].click();
+    return;
+  }
+  if (event.key === "Tab") {
+    const dialog = document.querySelector('[role="dialog"][aria-modal="true"]');
+    if (dialog) {
+      const focusable = [...dialog.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => !element.hidden && element.getClientRects().length);
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (first && last && (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      }
+    }
+  }
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
     event.preventDefault();
     state.searchOpen = true;
+    state.modalEvent = null;
+    state.conceptPopover = null;
+    state.insightModal = null;
+    state.selectedEdge = null;
+    state.detailNode = null;
     render();
   }
   if (event.key === "Escape") {

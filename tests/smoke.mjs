@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import {
   companies,
   economicEdges,
@@ -28,8 +28,20 @@ function hasPath(sequence) {
 await Promise.all([
   access(new URL("../index.html", import.meta.url)),
   access(new URL("../src/app.js", import.meta.url)),
-  access(new URL("../src/styles.css", import.meta.url))
+  access(new URL("../src/styles.css", import.meta.url)),
+  access(new URL("../src/assets/econflow-hero-v1.png", import.meta.url))
 ]);
+
+const [appSource, styleSource] = await Promise.all([
+  readFile(new URL("../src/app.js", import.meta.url), "utf8"),
+  readFile(new URL("../src/styles.css", import.meta.url), "utf8")
+]);
+
+assert.match(appSource, /class="skip-link"/, "키보드 사용자를 위한 본문 건너뛰기 링크가 있어야 합니다.");
+assert.match(appSource, /aria-current="page"/, "현재 내비게이션 위치를 보조 기술에 알려야 합니다.");
+assert.match(appSource, /role="status" aria-live="polite"/, "상태 알림은 비방해적으로 전달되어야 합니다.");
+assert.match(styleSource, /:focus-visible/, "전역 키보드 포커스 스타일이 있어야 합니다.");
+assert.match(styleSource, /env\(safe-area-inset-bottom\)/, "모바일 하단 내비게이션은 안전 영역을 고려해야 합니다.");
 
 assert.ok(Object.keys(economicNodes).length >= 20, "경제지도에 충분한 mock 노드가 있어야 합니다.");
 assert.ok(economicEdges.length >= 25, "사용자가 탐색할 수 있는 관계가 충분해야 합니다.");
