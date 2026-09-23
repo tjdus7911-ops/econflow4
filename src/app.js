@@ -69,9 +69,15 @@ const state = {
   searchQuery: "",
   interests: readStored("econflow_interests", defaultInterests),
   watchItems: readStored("econflow_watch", defaultWatchItems),
-  exploreHistory: ["usdkrw"],
+  exploreHistory: [],
   selectedEdge: null,
-  graphZoom: 1,
+  edgeExpanded: false,
+  exploreView: "easy",
+  expandedWhy: false,
+  expandedImpact: false,
+  flowFocus: null,
+  quickNode: null,
+  detailNode: null,
   marketCategory: "indices",
   bondCountry: "미국",
   curveCountry: "미국",
@@ -105,9 +111,15 @@ function go(route) {
 
 function goToNode(nodeId, options = {}) {
   if (!economicNodes[nodeId]) return;
-  if (options.reset) state.exploreHistory = [nodeId];
+  if (options.reset || parseRoute().page !== "explore") state.exploreHistory = [nodeId];
   else if (state.exploreHistory.at(-1) !== nodeId) state.exploreHistory.push(nodeId);
   state.selectedEdge = options.edge || null;
+  state.edgeExpanded = false;
+  state.quickNode = options.quick === false ? null : nodeId;
+  state.detailNode = null;
+  state.expandedWhy = false;
+  state.expandedImpact = false;
+  state.flowFocus = null;
   go(`#/explore/${nodeId}`);
 }
 
@@ -263,41 +275,169 @@ function renderToday() {
     </main>`;
 }
 
-function renderGraphLane(edges, direction) {
-  if (!edges.length) return `<div class="empty-lane"><span>이 방향의 연결을<br>정리하고 있어요.</span></div>`;
-  return edges.slice(0, 4).map((edge) => {
-    const nodeId = direction === "incoming" ? edge.from : edge.to;
-    const node = getNode(nodeId);
-    return `<div class="graph-branch ${direction}">
-      ${direction === "outgoing" ? `<button class="edge-link" data-edge="${edge.id}" title="${edge.description}"><span>${icon("arrow", 16)}</span><i>관계 보기</i></button>` : ""}
-      <button class="economic-node node-${direction === "incoming" ? "why" : "impact"} ${state.interests.includes(nodeId) ? "is-interest" : ""}" data-node="${nodeId}">
-        <span class="node-category">${node.category}</span><strong>${node.name}</strong><small>${node.status}</small>
-        ${state.interests.includes(nodeId) ? '<span class="interest-star">★</span>' : ""}
-      </button>
-      ${direction === "incoming" ? `<button class="edge-link" data-edge="${edge.id}" title="${edge.description}"><span>${icon("arrow", 16)}</span><i>관계 보기</i></button>` : ""}
-    </div>`;
-  }).join("");
+const easyNodeNames = {
+  "us-cpi": "미국 물가",
+  fed: "미국 금리 기대",
+  "us-treasury-10y": "미국 국채",
+  "jgb-10y": "일본 국채",
+  "rate-expectation": "앞으로의 금리 기대"
+};
+
+const easyHiddenNodes = new Set(["us-cpi", "fed", "rate-expectation"]);
+
+const flowPriorities = {
+  "us-inflation>us-rate": 1,
+  "us-rate>us-treasury-10y": 1,
+  "us-treasury-10y>dollar": 1,
+  "dollar>usdkrw": 1,
+  "usdkrw>import-prices": 1,
+  "import-prices>consumer-prices": 1,
+  "us-rate>dollar": 2,
+  "us-rate>gold": 3,
+  "usdkrw>corporate-cost": 2,
+  "usdkrw>japan-travel": 3
+};
+
+const relationshipLabels = {
+  "us-inflation>us-rate": "금리 결정의 주요 지표",
+  "us-rate>us-treasury-10y": "시장금리에 영향",
+  "us-rate>dollar": "금리차와 연결",
+  "us-rate>gold": "금리·달러와 연결",
+  "us-treasury-10y>dollar": "금리차와 자금 흐름",
+  "dollar>usdkrw": "달러 강도와 연결",
+  "usdkrw>import-prices": "수입 원화가격에 영향",
+  "import-prices>consumer-prices": "생활물가로 일부 전달",
+  "oil>import-prices": "원유 수입비용에 영향"
+};
+
+const detailedIndicators = {
+  "us-inflation": ["CPI", "PCE", "근원물가"],
+  "us-rate": ["Fed", "미국 국채 2Y·10Y", "Yield Curve"],
+  "us-treasury-10y": ["2Y·10Y", "Yield Curve", "Fed"],
+  dollar: ["DXY", "미국 국채 10Y", "Fed"],
+  usdkrw: ["USD/KRW", "DXY", "한·미 금리차"]
+};
+
+function displayNodeName(node) {
+  return state.exploreView === "easy" ? easyNodeNames[node.id] || node.name : node.name;
+}
+
+function relationshipLabel(edge) {
+  const explicit = relationshipLabels[`${edge.from}>${edge.to}`];
+  if (explicit) return explicit;
+  if (edge.relationshipType && edge.relationshipType !== "경제적 전달 경로") return edge.relationshipType;
+  const targetCategoryLabels = {
+    금리: "금리 판단에 영향",
+    환율: "통화 가치와 연결",
+    국채: "시장금리에 영향",
+    물가: "물가 흐름에 영향",
+    "물가 지표": "물가 지표로 확인",
+    중앙은행: "정책 판단에 영향",
+    금융여건: "금융여건과 연결",
+    금융시장: "자금 흐름과 연결",
+    실물경제: "경기 흐름에 영향",
+    고용: "고용 흐름에 영향",
+    원자재: "원자재 가격과 연결",
+    생활경제: "체감 비용으로 연결",
+    기업비용: "기업 비용으로 전달",
+    기업: "기업 실적과 연결",
+    산업: "산업 수요와 연결",
+    인프라: "투자 수요와 연결"
+  };
+  return targetCategoryLabels[getNode(edge.to).category] || "다음 경제 흐름과 연결";
+}
+
+function orderedFlowEdges(nodeId, direction) {
+  const edges = direction === "incoming" ? getIncomingEdges(nodeId) : getOutgoingEdges(nodeId);
+  const filtered = state.exploreView === "easy"
+    ? edges.filter((edge) => !easyHiddenNodes.has(direction === "incoming" ? edge.from : edge.to))
+    : edges;
+  const visiblePool = filtered.length ? filtered : edges;
+  return [...visiblePool].sort((left, right) => {
+    const leftPriority = flowPriorities[`${left.from}>${left.to}`] ?? 50;
+    const rightPriority = flowPriorities[`${right.from}>${right.to}`] ?? 50;
+    return leftPriority - rightPriority;
+  });
+}
+
+function renderFlowNodeCard(nodeId) {
+  const node = getNode(nodeId);
+  const detail = state.exploreView === "detailed" ? node.metric : node.status;
+  return `<button class="flow-node-card ${state.interests.includes(nodeId) ? "is-interest" : ""}" data-node="${nodeId}" aria-label="${node.name}을 현재 항목으로 보기">
+    <span class="node-category">${node.region} · ${node.category}</span>
+    <strong>${displayNodeName(node)}</strong>
+    <small>${detail}</small>
+    ${state.exploreView === "detailed" ? `<p class="detail-only">${node.change}</p>` : ""}
+    ${state.interests.includes(nodeId) ? '<span class="interest-star">★</span>' : ""}
+  </button>`;
+}
+
+function renderFlowRelation(edge) {
+  return `<button class="flow-relation" data-edge="${edge.id}" aria-label="${getNode(edge.from).name}에서 ${getNode(edge.to).name}으로 이어지는 관계 설명 보기">
+    <span class="relation-label">${relationshipLabel(edge)}</span>
+  </button>`;
+}
+
+function renderFlowLane(nodeId, direction) {
+  const edges = orderedFlowEdges(nodeId, direction);
+  if (!edges.length) return `<div class="empty-lane"><span>${direction === "incoming" ? "정리된 직접 원인이" : "정리된 직접 연결이"}<br>아직 없어요.</span></div>`;
+  const expanded = direction === "incoming" ? state.expandedWhy : state.expandedImpact;
+  const visible = expanded ? edges : edges.slice(0, 3);
+  const hiddenCount = Math.max(0, edges.length - visible.length);
+  return `${visible.map((edge) => {
+    const relatedNodeId = direction === "incoming" ? edge.from : edge.to;
+    return direction === "incoming"
+      ? `<div class="flow-node-row why-row">${renderFlowNodeCard(relatedNodeId)}${renderFlowRelation(edge)}</div>`
+      : `<div class="flow-node-row impact-row">${renderFlowRelation(edge)}${renderFlowNodeCard(relatedNodeId)}</div>`;
+  }).join("")}${hiddenCount ? `<button class="expand-relations" data-action="expand-${direction === "incoming" ? "why" : "impact"}" aria-expanded="false">${icon("plus", 13)} 다른 ${direction === "incoming" ? "원인" : "연결"} ${hiddenCount}개</button>` : expanded && edges.length > 3 ? `<button class="expand-relations" data-action="collapse-${direction === "incoming" ? "why" : "impact"}" aria-expanded="true">간단히 보기</button>` : ""}`;
+}
+
+function renderCurrentFlowCard(nodeId) {
+  const node = getNode(nodeId);
+  const primaryValue = node.currentValues?.[0];
+  const indicators = detailedIndicators[nodeId] || [node.metric];
+  const conceptId = conceptIdForNode(node);
+  return `<div class="flow-list">
+    <article class="current-flow-card">
+      <div class="current-card-head">
+        <div><span>${node.region} · ${node.category}</span><strong>${displayNodeName(node)}</strong></div>
+        ${conceptId ? conceptTrigger(conceptId, "이게 뭐예요?") : `<button class="concept-trigger" data-action="current-explain" data-id="${node.id}" aria-label="${node.name} 간단 설명">이게 뭐예요? ${icon("info", 14)}</button>`}
+      </div>
+      <div class="current-stat">
+        <span>${primaryValue ? primaryValue[0] : "현재 흐름"}</span>
+        <strong>${primaryValue ? primaryValue[1] : node.metric}</strong>
+        <small>${primaryValue ? primaryValue[2] : node.updated}</small>
+        <p>${node.change}</p>
+      </div>
+      ${state.exploreView === "detailed" ? `<div class="detail-only detailed-indicators"><span>함께 보는 전문 지표</span><div>${indicators.map((item) => `<b>${item}</b>`).join("")}</div></div>` : ""}
+    </article>
+    <div class="direction-actions" aria-label="탐색 방향 선택">
+      <button class="direction-action ${state.flowFocus === "why" ? "is-active" : ""}" data-action="focus-why" aria-pressed="${state.flowFocus === "why"}">← 왜?</button>
+      <button class="direction-action ${state.flowFocus === "impact" ? "is-active" : ""}" data-action="focus-impact" aria-pressed="${state.flowFocus === "impact"}">그래서? →</button>
+    </div>
+  </div>`;
 }
 
 function renderEconomicGraph(nodeId) {
-  const node = getNode(nodeId);
-  const incoming = getIncomingEdges(nodeId);
-  const outgoing = getOutgoingEdges(nodeId);
-  return `
-    <div class="graph-stage" style="--graph-scale:${state.graphZoom}">
-      <div class="graph-column-head why"><span>WHY</span><small>어디에서 왔을까요?</small></div>
-      <div class="graph-column-head current"><span>NOW</span><small>지금 보고 있는 현상</small></div>
-      <div class="graph-column-head impact"><span>IMPACT</span><small>어디로 이어질까요?</small></div>
-      <div class="graph-lane why-lane">${renderGraphLane(incoming, "incoming")}</div>
-      <div class="graph-center-wrap">
-        <div class="center-halo"></div>
-        <button class="economic-node node-current" data-node="${nodeId}">
-          <span class="node-current-label">CURRENT</span><strong>${node.name}</strong><small>${node.change}</small>
-          <span class="node-metric">${node.metric}</span>
-        </button>
-      </div>
-      <div class="graph-lane impact-lane">${renderGraphLane(outgoing, "outgoing")}</div>
-    </div>`;
+  const focusClass = state.flowFocus ? ` is-focus-${state.flowFocus}` : "";
+  const detailClass = state.exploreView === "detailed" ? " is-detailed" : "";
+  return `<div class="flow-map-stage${focusClass}${detailClass}">
+    <section class="flow-column why-column">
+      <header class="flow-column-title"><span>WHY</span><strong>왜 이런 일이 생겼을까요?</strong></header>
+      <p class="flow-branch-note">각 요인이 현재 항목과 따로 연결돼요.</p>
+      <div class="flow-list">${renderFlowLane(nodeId, "incoming")}</div>
+    </section>
+    <section class="flow-column current-column">
+      <header class="flow-column-title"><span>CURRENT</span><strong>지금 보고 있어요</strong></header>
+      ${renderCurrentFlowCard(nodeId)}
+      <div class="flow-story-arrow">다음 연결을 아래에서 이어 보세요</div>
+    </section>
+    <section class="flow-column impact-column">
+      <header class="flow-column-title"><span>IMPACT</span><strong>어디로 연결될까요?</strong></header>
+      <p class="flow-branch-note">각 항목은 현재 항목에서 따로 이어져요.</p>
+      <div class="flow-list">${renderFlowLane(nodeId, "outgoing")}</div>
+    </section>
+  </div>`;
 }
 
 function detailLinkList(title, edges, direction) {
@@ -371,27 +511,94 @@ function renderNodeDetail(nodeId) {
   </aside>`;
 }
 
+function renderNodeQuickPopup() {
+  if (!state.quickNode) return "";
+  const node = getNode(state.quickNode);
+  const descriptions = {
+    dollar: "미국의 통화이자 글로벌 금융시장에서 널리 사용되는 대표적인 통화예요.",
+    "us-rate": "미국 중앙은행의 정책과 시장 기대를 함께 보여주는 금리 흐름이에요.",
+    "us-treasury-10y": "미국 정부가 발행한 장기 국채로, 세계 금융시장의 기준 금리 중 하나예요.",
+    usdkrw: "미국 달러 1단위와 교환되는 원화의 비율이에요.",
+    "import-prices": "해외 상품과 원재료를 들여올 때 원화로 치르는 가격의 흐름이에요."
+  };
+  return `<div class="quick-popup-layer">
+    <article class="node-quick-popup" role="dialog" aria-modal="false" aria-labelledby="quick-node-title" data-modal-stop>
+      <button class="modal-close" data-action="quick-close" aria-label="간단 설명 닫기">${icon("close", 17)}</button>
+      <span>${node.region} · ${node.category}</span>
+      <h3 id="quick-node-title">${displayNodeName(node)}</h3>
+      <p>${descriptions[node.id] || node.oneLine || node.what}</p>
+      <div class="quick-popup-actions">
+        <button data-action="quick-concept" data-id="${node.id}">이게 뭐예요?</button>
+        <button data-action="quick-why" data-id="${node.id}">왜 움직여요?</button>
+        <button data-action="quick-impact" data-id="${node.id}">어디에 영향줘요?</button>
+        <button data-action="quick-detail" data-id="${node.id}">자세히 알아보기 ${icon("arrow", 13)}</button>
+      </div>
+    </article>
+  </div>`;
+}
+
+function renderRelationshipPopup() {
+  if (!state.selectedEdge) return "";
+  const edge = economicEdges.find((item) => item.id === state.selectedEdge);
+  if (!edge) return "";
+  const source = getNode(edge.from);
+  const target = getNode(edge.to);
+  const otherFactors = (edge.otherFactors || []).slice(0, 3).join(" · ");
+  const expanded = state.edgeExpanded;
+  return `<div class="relation-popup-layer">
+    <article class="relation-popup ${expanded ? "is-expanded" : ""}" role="dialog" aria-modal="true" aria-labelledby="relation-popup-title" data-modal-stop>
+      <button class="modal-close" data-action="edge-clear" aria-label="관계 설명 닫기">${icon("close", 17)}</button>
+      <span class="section-kicker">RELATIONSHIP</span>
+      <h2 id="relation-popup-title">왜 연결돼요?</h2>
+      <div class="relation-popup-path"><strong>${displayNodeName(source)}</strong>${icon("arrow", 15)}<strong>${displayNodeName(target)}</strong></div>
+      <p>${edge.description}</p>
+      <div class="relation-caveat"><b>다른 요인도 함께 봐야 해요</b><span>${otherFactors || "경기·정책·시장 기대 등 여러 조건이 함께 작용할 수 있어요."}</span></div>
+      ${expanded ? `<div class="relation-expanded">
+        <section><b>어떻게 전달될까요?</b><div class="relation-transmission">${(edge.transmissionPath || [source.name, "관련 여건 변화", target.name]).map((step, index) => `${index ? icon("arrow", 12) : ""}<span>${step}</span>`).join("")}</div></section>
+        <section><b>함께 확인할 데이터</b><div class="relation-data-chips">${(edge.relatedIndicators || []).map((item) => `<span>${item}</span>`).join("") || "관련 공식 지표"}</div></section>
+        <p>${icon("info", 14)} 하나의 요인만으로 결과를 단정하지 않고, 함께 움직일 수 있는 경로를 설명해요.</p>
+      </div>` : ""}
+      <button class="primary-button small" data-action="${expanded ? "edge-collapse" : "edge-learn"}">${expanded ? `간단히 보기` : `30초 이해하기 ${icon("arrow", 13)}`}</button>
+    </article>
+  </div>`;
+}
+
+function renderNodeDetailModal() {
+  if (!state.detailNode) return "";
+  return `<div class="node-detail-backdrop">
+    <section class="node-detail-modal" role="dialog" aria-modal="true" aria-label="${getNode(state.detailNode).name} 상세 정보" data-modal-stop>
+      <button class="modal-close" data-action="detail-close" aria-label="상세 정보 닫기">${icon("close", 18)}</button>
+      ${renderNodeDetail(state.detailNode)}
+    </section>
+  </div>`;
+}
+
 function renderExplore(nodeId = "usdkrw") {
   const node = getNode(nodeId);
-  if (state.exploreHistory.at(-1) !== nodeId) state.exploreHistory.push(nodeId);
+  if (state.quickNode && state.quickNode !== nodeId) state.quickNode = null;
+  if (state.detailNode && state.detailNode !== nodeId) state.detailNode = null;
+  if (state.exploreHistory.at(-1) !== nodeId) {
+    const previousIndex = state.exploreHistory.lastIndexOf(nodeId);
+    if (previousIndex >= 0) state.exploreHistory = state.exploreHistory.slice(0, previousIndex + 1);
+    else state.exploreHistory.push(nodeId);
+  }
   const trail = state.exploreHistory.slice(-4);
   return `
     <main class="explore-page">
       <section class="explore-topbar">
         <div><p class="section-kicker">ECONOMIC MAP</p><h1>경제 탐색</h1></div>
-        <div class="explore-help">${icon("info", 16)} 노드와 연결선을 눌러 흐름을 탐색하세요</div>
+        <div class="explore-help">${icon("info", 16)} 왼쪽에서 오른쪽으로 읽어보세요</div>
       </section>
       <div class="explore-shell">
         <section class="graph-panel">
           <div class="graph-toolbar">
             <button class="toolbar-button" data-action="explore-back" ${state.exploreHistory.length <= 1 ? "disabled" : ""}>${icon("back", 16)} 이전</button>
-            <div class="breadcrumb"><span>탐색 경로</span>${trail.map((id, i) => `<b>${i ? icon("chevron", 12) : ""}${getNode(id).name}</b>`).join("")}</div>
-            <div class="toolbar-right"><button class="toolbar-button" data-action="explore-reset">${icon("reset", 16)} 초기화</button><span class="zoom-control"><button data-action="zoom-out" aria-label="축소">${icon("minus", 15)}</button><b>${Math.round(state.graphZoom * 100)}%</b><button data-action="zoom-in" aria-label="확대">${icon("plus", 15)}</button></span></div>
+            <div class="breadcrumb"><span>탐색 경로</span>${trail.map((id, i) => `<b>${i ? icon("chevron", 12) : ""}${displayNodeName(getNode(id))}</b>`).join("")}</div>
+            <div class="toolbar-right"><button class="toolbar-button" data-action="explore-reset">${icon("reset", 16)} 초기화</button><div class="explore-view-toggle" aria-label="경제지도 표시 수준"><button class="${state.exploreView === "easy" ? "is-active" : ""}" data-action="explore-view" data-id="easy" aria-pressed="${state.exploreView === "easy"}">쉽게 보기</button><button class="${state.exploreView === "detailed" ? "is-active" : ""}" data-action="explore-view" data-id="detailed" aria-pressed="${state.exploreView === "detailed"}">자세히 보기</button></div></div>
           </div>
-          <div class="graph-intro"><div><span class="live-dot"><i></i>${node.status}</span><h2>${node.name}의 연결을 보고 있어요</h2></div><p>왼쪽은 관련 요인, 오른쪽은 영향을 줄 수 있는 경로예요.</p></div>
-          <div class="graph-canvas">${renderEconomicGraph(nodeId)}<div class="graph-legend"><span><i class="why"></i>WHY 관련 요인</span><span><i class="current"></i>현재 선택</span><span><i class="impact"></i>IMPACT 경로</span><span><i class="interest"></i>내 관심사</span></div></div>
+          <div class="graph-intro"><div><span class="live-dot"><i></i>${node.status}</span><h2>경제는 연결되어 있어요.</h2></div><p>궁금한 항목을 선택하고 “왜?”와 “그래서?”를 따라가 보세요.</p></div>
+          <div class="graph-canvas">${renderEconomicGraph(nodeId)}${renderNodeQuickPopup()}</div>
         </section>
-        ${renderNodeDetail(nodeId)}
       </div>
     </main>`;
 }
@@ -596,6 +803,14 @@ function render() {
   const route = parseRoute();
   const validPages = ["today", "explore", "market", "calendar", "my", "company", "concept"];
   const page = validPages.includes(route.page) ? route.page : "today";
+  if (page !== "explore") {
+    state.selectedEdge = null;
+    state.edgeExpanded = false;
+    state.quickNode = null;
+    state.detailNode = null;
+  }
+  const routeKey = `${page}/${route.id || ""}`;
+  const routeChanged = render.lastRoute !== routeKey;
   let content = "";
   if (page === "today") content = renderToday();
   if (page === "explore") content = renderExplore(route.id || "usdkrw");
@@ -604,10 +819,11 @@ function render() {
   if (page === "my") content = renderMy();
   if (page === "company") content = renderCompany(route.id || "samsung");
   if (page === "concept") content = renderConceptPage(route.id || "inflation");
-  app.innerHTML = `${renderHeader(page)}${content}${page === "explore" ? "" : renderFooter()}${renderSearchModal()}${renderEventModal()}${renderConceptPopover()}${renderInsightModal()}${state.toast ? `<div class="toast">${icon("check", 16)} ${state.toast}</div>` : ""}`;
-  document.body.classList.toggle("has-modal", state.searchOpen || Boolean(state.modalEvent) || Boolean(state.conceptPopover) || Boolean(state.insightModal));
+  app.innerHTML = `${renderHeader(page)}${content}${page === "explore" ? "" : renderFooter()}${renderSearchModal()}${renderEventModal()}${renderConceptPopover()}${renderInsightModal()}${page === "explore" ? `${renderRelationshipPopup()}${renderNodeDetailModal()}` : ""}${state.toast ? `<div class="toast">${icon("check", 16)} ${state.toast}</div>` : ""}`;
+  document.body.classList.toggle("has-modal", state.searchOpen || Boolean(state.modalEvent) || Boolean(state.conceptPopover) || Boolean(state.insightModal) || (page === "explore" && Boolean(state.selectedEdge || state.detailNode)));
   if (state.searchOpen) requestAnimationFrame(() => document.querySelector("#global-search-input")?.focus());
-  window.scrollTo({ top: 0, behavior: "instant" });
+  if (routeChanged) window.scrollTo({ top: 0, behavior: "instant" });
+  render.lastRoute = routeKey;
 }
 
 function toggleListItem(list, id) {
@@ -650,6 +866,8 @@ document.addEventListener("click", (event) => {
   const edgeButton = event.target.closest("[data-edge]");
   if (edgeButton) {
     state.selectedEdge = edgeButton.dataset.edge;
+    state.edgeExpanded = false;
+    state.quickNode = null;
     render();
     return;
   }
@@ -731,25 +949,78 @@ document.addEventListener("click", (event) => {
   } else if (action === "company-tab") {
     state.companyTab = id;
     render();
+  } else if (action === "explore-view") {
+    state.exploreView = id === "detailed" ? "detailed" : "easy";
+    state.expandedWhy = false;
+    state.expandedImpact = false;
+    state.selectedEdge = null;
+    state.edgeExpanded = false;
+    render();
+  } else if (action === "focus-why" || action === "focus-impact") {
+    const direction = action === "focus-why" ? "why" : "impact";
+    state.flowFocus = state.flowFocus === direction ? null : direction;
+    state.quickNode = null;
+    render();
+  } else if (action === "expand-why" || action === "collapse-why") {
+    state.expandedWhy = action === "expand-why";
+    render();
+  } else if (action === "expand-impact" || action === "collapse-impact") {
+    state.expandedImpact = action === "expand-impact";
+    render();
+  } else if (action === "quick-close") {
+    state.quickNode = null;
+    render();
+  } else if (action === "current-explain") {
+    state.quickNode = id;
+    render();
+  } else if (action === "quick-concept") {
+    const conceptId = conceptIdForNode(getNode(id));
+    state.quickNode = null;
+    if (conceptId) state.conceptPopover = conceptId;
+    else state.detailNode = id;
+    render();
+  } else if (action === "quick-why" || action === "quick-impact") {
+    state.quickNode = null;
+    state.flowFocus = action === "quick-why" ? "why" : "impact";
+    render();
+  } else if (action === "quick-detail") {
+    state.quickNode = null;
+    state.detailNode = id;
+    render();
+  } else if (action === "detail-close") {
+    state.detailNode = null;
+    render();
+  } else if (action === "edge-learn") {
+    state.edgeExpanded = true;
+    render();
+  } else if (action === "edge-collapse") {
+    state.edgeExpanded = false;
+    render();
   } else if (action === "explore-back") {
     if (state.exploreHistory.length > 1) {
       state.exploreHistory.pop();
       state.selectedEdge = null;
+      state.edgeExpanded = false;
+      state.quickNode = null;
+      state.detailNode = null;
+      state.expandedWhy = false;
+      state.expandedImpact = false;
+      state.flowFocus = null;
       go(`#/explore/${state.exploreHistory.at(-1)}`);
     }
   } else if (action === "explore-reset") {
     state.exploreHistory = ["usdkrw"];
     state.selectedEdge = null;
-    state.graphZoom = 1;
+    state.edgeExpanded = false;
+    state.quickNode = null;
+    state.detailNode = null;
+    state.expandedWhy = false;
+    state.expandedImpact = false;
+    state.flowFocus = null;
     go("#/explore/usdkrw");
-  } else if (action === "zoom-in") {
-    state.graphZoom = Math.min(1.15, state.graphZoom + 0.05);
-    render();
-  } else if (action === "zoom-out") {
-    state.graphZoom = Math.max(0.85, state.graphZoom - 0.05);
-    render();
   } else if (action === "edge-clear") {
     state.selectedEdge = null;
+    state.edgeExpanded = false;
     render();
   }
 });
@@ -778,11 +1049,15 @@ document.addEventListener("keydown", (event) => {
     render();
   }
   if (event.key === "Escape") {
-    if (state.searchOpen || state.modalEvent || state.conceptPopover || state.insightModal) {
+    if (state.searchOpen || state.modalEvent || state.conceptPopover || state.insightModal || state.quickNode || state.detailNode || state.selectedEdge) {
       state.searchOpen = false;
       state.modalEvent = null;
       state.conceptPopover = null;
       state.insightModal = null;
+      state.quickNode = null;
+      state.detailNode = null;
+      state.selectedEdge = null;
+      state.edgeExpanded = false;
       render();
     }
   }

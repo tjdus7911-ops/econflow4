@@ -39,6 +39,7 @@ assert.ok(companies.samsung, "삼성전자 기업 상세 데이터가 있어야 
 assert.ok(Object.values(marketData).every((items) => items.length >= 3), "모든 시장 분류에 항목이 있어야 합니다.");
 
 assert.ok(hasPath(["us-rate", "dollar", "usdkrw", "import-prices"]), "시나리오 A의 경제 흐름이 연결되어야 합니다.");
+assert.ok(hasPath(["us-inflation", "us-rate", "us-treasury-10y", "dollar", "usdkrw", "import-prices"]), "경제 탐색 필수 시나리오가 한 단계씩 직접 연결되어야 합니다.");
 assert.ok(hasPath(["boj", "japan-rate", "yen", "japan-travel"]), "시나리오 B의 경제 흐름이 연결되어야 합니다.");
 assert.ok(searchCatalog.some((item) => item.terms.includes("엔화는 왜 움직이는 거야") && item.target === "yen"), "시나리오 C 자연어 검색 결과가 있어야 합니다.");
 assert.ok(hasPath(["consumption", "inflation", "interest-rate", "loan"]), "인플레이션 개념 흐름이 연결되어야 합니다.");

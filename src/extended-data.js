@@ -218,6 +218,7 @@ Object.assign(economicNodes, newNodes);
 
 const additionalEdges = [
   ["us-cpi","fed","미국 CPI는 Fed의 정책 판단과 시장의 금리 기대에 영향을 줄 수 있어요.","물가 지표","CPI 결과 → 정책 기대 재평가 → 금리 경로",["고용","금융 안정","기대인플레이션"],["미국 CPI","Fed Funds Rate"]],
+  ["us-rate","us-treasury-10y","미국의 금리 경로 기대가 달라지면 채권 가격이 조정되면서 미국 국채 수익률에도 영향을 줄 수 있어요.","시장금리에 영향","미국 금리 기대 → 채권 가격 조정 → 미국 국채 수익률",["물가 기대","경기 전망","국채 수급","기간 프리미엄"],["Fed Funds Rate","미국 국채 2년","미국 국채 10년"]],
   ["fed","us-treasury-10y","정책금리 기대와 장기 국채금리는 여러 경로를 통해 관련될 수 있어요.","정책 기대","정책 기대 → 채권시장 기대 → 국채 수익률",["물가 기대","경기 전망","국채 수급","글로벌 자금 흐름"],["Fed 기준금리","미국 국채 10년","CPI"]],
   ["us-treasury-10y","dollar","미국 장기금리 변화는 달러 자산의 상대적 매력과 연결될 수 있어요.","금리 차이","국채 수익률 → 달러 자산 선호 → 달러",["위험 선호","다른 국가 금리","경상수지"],["미국 10년물","달러지수"]],
   ["japan-cpi","boj","일본 물가 흐름은 BOJ의 정책 판단에 영향을 줄 수 있어요.","물가·정책","일본 CPI → BOJ 판단 → 정책 신호",["임금","성장","금융여건"],["일본 CPI","BOJ 정책금리"]],
@@ -260,6 +261,9 @@ economicEdges.forEach((edge) => {
 });
 
 export const nodeExtensions = {
+  "us-inflation": { oneLine:"미국에서 상품과 서비스의 가격이 전반적으로 얼마나 움직이는지 보여주는 흐름이에요.", currentValues:[["미국 CPI","2.7%","전년 대비"],["Core PCE","2.6%","전년 대비"]], relatedConcepts:["inflation","cpi","pce","policy-rate"] },
+  "us-rate": { oneLine:"미국 중앙은행의 정책금리와 앞으로의 금리 경로에 대한 시장 기대예요.", currentValues:[["미국 정책금리","4.25–4.50%","현재 범위"],["미국 10년물","4.18%","+5bp"]], relatedConcepts:["policy-rate","fomc","treasury","yield-curve"] },
+  "import-prices": { oneLine:"해외 상품과 원재료를 들여올 때 원화로 치르는 가격의 흐름이에요.", currentValues:[["수입물가지수","환율·유가 반영","Mock"],["원/달러","1,338.40","+0.41%"]], relatedConcepts:["inflation","exchange","oil"] },
   yen: {
     oneLine:"일본의 공식 통화입니다.",
     currentValues:[["USD/JPY","147.82","+0.42%"],["JPY/KRW (100)","925.18","-0.26%"]],
